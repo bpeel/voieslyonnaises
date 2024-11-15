@@ -47,20 +47,6 @@ function getCrossIconUrl(): string {
   return canvas.toDataURL();
 }
 
-function groupFeaturesByColor(features: ColoredLineStringFeature[]) {
-  const featuresByColor: Record<string, Feature[]> = {};
-  for (const feature of features) {
-    const color = feature.properties.color;
-
-    if (featuresByColor[color]) {
-      featuresByColor[color].push(feature);
-    } else {
-      featuresByColor[color] = [feature];
-    }
-  }
-  return featuresByColor;
-}
-
 export const useMap = () => {
   const { getLineColor } = useColors();
 
@@ -410,53 +396,46 @@ export const useMap = () => {
   function plotPostponedSections({ map, features }: { map: Map; features: ColoredLineStringFeature[] }) {
     const sections = features.filter(feature => feature.properties.status === 'postponed');
 
-    if (sections.length === 0) {
-      for (let line = 1; line <= getNbVoiesCyclables(); line++) {
-        upsertMapSource(map, `postponed-sections-${getLineColor(line)}`, []);
-      }
+    if (sections.length === 0 && !map.getLayer('postponed-sections')) {
+      return;
+    }
+    if (upsertMapSource(map, 'postponed-sections', sections)) {
       return;
     }
 
-    const featuresByColor = groupFeaturesByColor(sections);
-    for (const [color, sameColorFeatures] of Object.entries(featuresByColor)) {
-      if (upsertMapSource(map, `postponed-sections-${color}`, sameColorFeatures as Feature[])) {
-        continue;
+    map.addLayer({
+      id: 'postponed-symbols',
+      type: 'symbol',
+      source: 'postponed-sections',
+      layout: {
+        'symbol-placement': 'line',
+        'symbol-spacing': 1,
+        'icon-image': 'cross-icon',
+        'icon-size': 1.2
+      },
+      paint: {
+        'icon-color': ['get', 'color']
       }
+    });
+    map.addLayer({
+      id: 'postponed-text',
+      type: 'symbol',
+      source: 'postponed-sections',
+      paint: {
+        'text-halo-color': '#fff',
+        'text-halo-width': 3
+      },
+      layout: {
+        'symbol-placement': 'line',
+        'symbol-spacing': 150,
+        'text-font': ['Open Sans Regular'],
+        'text-field': 'reporté',
+        'text-size': 14
+      }
+    });
 
-      map.addLayer({
-        id: `postponed-symbols-${color}`,
-        type: 'symbol',
-        source: `postponed-sections-${color}`,
-        layout: {
-          'symbol-placement': 'line',
-          'symbol-spacing': 1,
-          'icon-image': 'cross-icon',
-          'icon-size': 1.2
-        },
-        paint: {
-          'icon-color': color
-        }
-      });
-      map.addLayer({
-        id: `postponed-text-${color}`,
-        type: 'symbol',
-        source: `postponed-sections-${color}`,
-        paint: {
-          'text-halo-color': '#fff',
-          'text-halo-width': 3
-        },
-        layout: {
-          'symbol-placement': 'line',
-          'symbol-spacing': 150,
-          'text-font': ['Open Sans Regular'],
-          'text-field': 'reporté',
-          'text-size': 14
-        }
-      });
-
-      map.on('mouseenter', `postponed-symbols-${color}`, () => (map.getCanvas().style.cursor = 'pointer'));
-      map.on('mouseleave', `postponed-symbols-${color}`, () => (map.getCanvas().style.cursor = ''));
-    }
+    map.on('mouseenter', 'postponed-symbols', () => (map.getCanvas().style.cursor = 'pointer'));
+    map.on('mouseleave', 'postponed-symbols', () => (map.getCanvas().style.cursor = ''));
   }
 
   function plotPerspective({ map, features }: { map: Map; features: Feature[] }) {
