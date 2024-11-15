@@ -64,9 +64,10 @@ function groupFeaturesByColor(features: ColoredLineStringFeature[]) {
 export const useMap = () => {
   const { getLineColor } = useColors();
 
-  function addLineColor(feature: LineStringFeature): ColoredLineStringFeature {
+  function addLineColorAndId(feature: LineStringFeature, index: number): ColoredLineStringFeature {
     return {
       ...feature,
+      id: index,
       properties: {
         color: getLineColor(feature.properties.line),
         ...feature.properties
@@ -103,12 +104,10 @@ export const useMap = () => {
   }
 
   function plotUnderlinedSections({ map, features }: { map: Map; features: LineStringFeature[] }) {
-    const sections = features.map((feature, index) => ({ id: index, ...feature }));
-
-    if (sections.length === 0 && !map.getLayer('highlight')) {
+    if (features.length === 0 && !map.getLayer('highlight')) {
       return;
     }
-    if (upsertMapSource(map, 'all-sections', sections)) {
+    if (upsertMapSource(map, 'all-sections', features)) {
       return;
     }
 
@@ -654,7 +653,7 @@ export const useMap = () => {
   }
 
   function plotFeatures({ map, features }: { map: Map; features: Feature[] }) {
-    const lineStringFeatures = features.filter(isLineStringFeature).sort(sortByLine).map(addLineColor);
+    const lineStringFeatures = features.filter(isLineStringFeature).sort(sortByLine).map(addLineColorAndId);
 
     plotUnderlinedSections({ map, features: lineStringFeatures });
     plotDoneSections({ map, features: lineStringFeatures });
