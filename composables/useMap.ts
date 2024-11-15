@@ -47,6 +47,65 @@ function getCrossIconUrl(): string {
   return canvas.toDataURL();
 }
 
+function selectLineForSource(map: Map, source: string, line: number) {
+  // Get a list of all the features for this line that have an id property
+  const lineFeatures = map.querySourceFeatures(source, {
+    filter: [
+      'all',
+      ['==', ['geometry-type'], 'LineString'],
+      ['!=', ['get', 'source'], 'openmaptiles'], // Exclude base map features
+      ['has', 'status'], // All sections in geojson LineStrings have a status
+      ['has', 'id'],
+      ['has', 'color'],
+      ['has', 'line'],
+      ['==', ['get', 'line'], line]
+    ]
+  });
+
+  for (const feature of lineFeatures) {
+    // Get a list of all features that share the same id
+    const sharedFeatures = map.querySourceFeatures(source, {
+      filter: [
+        'all',
+        ['==', ['geometry-type'], 'LineString'],
+        ['!=', ['get', 'source'], 'openmaptiles'], // Exclude base map features
+        ['has', 'status'], // All sections in geojson LineStrings have a status
+        ['has', 'id'],
+        ['==', ['get', 'id'], feature.properties.id]
+      ]
+    });
+
+    for (const otherFeature of sharedFeatures) {
+      if (otherFeature.id === undefined)
+        continue;
+
+      map.setFeatureState({ source: source, id: otherFeature.id },
+                          { colorOverride: feature.properties.color });
+    }
+  }
+}
+
+const selectLine = (() => {
+  let selectedLine = null;
+  const coloredSources = ['done-sections',
+                          'wip-sections',
+                          'planned-sections',
+                          'postponed-sections',
+                          'variante-sections',
+                          'variante-postponed-sections',
+                          'unknown-sections'];
+
+  return function(map: Map, line: number) {
+    if (line === selectedLine)
+      return;
+
+    for (const source of coloredSources)
+      selectLineForSource(map, source, line);
+
+    selectedLine = line;
+  };
+})();
+
 export const useMap = () => {
   const { getLineColor } = useColors();
 
@@ -151,6 +210,10 @@ export const useMap = () => {
       }
       hoveredLineId = null;
     });
+    map.on('mouseenter', 'highlight', (e: any) => {
+      if (e.features[0].properties.line !== undefined)
+        selectLine(map, e.features[0].properties.line);
+    });
   }
 
   function plotDoneSections({ map, features }: { map: Map; features: ColoredLineStringFeature[] }) {
@@ -171,7 +234,7 @@ export const useMap = () => {
       source: 'done-sections',
       paint: {
         'line-width': 4,
-        'line-color': ['get', 'color']
+        'line-color': ['to-color', ['feature-state', 'colorOverride'], ['get', 'color']],
       }
     });
   }
@@ -195,7 +258,7 @@ export const useMap = () => {
       source: 'wip-sections',
       paint: {
         'line-width': 4,
-        'line-color': ['get', 'color'],
+        'line-color': ['to-color', ['feature-state', 'colorOverride'], ['get', 'color']],
         'line-dasharray': [0, 2, 2]
       }
     });
@@ -243,7 +306,7 @@ export const useMap = () => {
       source: 'planned-sections',
       paint: {
         'line-width': 4,
-        'line-color': ['get', 'color'],
+        'line-color': ['to-color', ['feature-state', 'colorOverride'], ['get', 'color']],
         'line-dasharray': [2, 2]
       }
     });
@@ -265,7 +328,7 @@ export const useMap = () => {
       source: 'variante-sections',
       paint: {
         'line-width': 4,
-        'line-color': ['get', 'color'],
+        'line-color': ['to-color', ['feature-state', 'colorOverride'], ['get', 'color']],
         'line-dasharray': [2, 2],
         'line-opacity': 0.5
       }
@@ -307,7 +370,7 @@ export const useMap = () => {
       source: 'variante-postponed-sections',
       paint: {
         'line-width': 4,
-        'line-color': ['get', 'color'],
+        'line-color': ['to-color', ['feature-state', 'colorOverride'], ['get', 'color']],
         'line-dasharray': [2, 2],
         'line-opacity': 0.5
       }
@@ -360,7 +423,7 @@ export const useMap = () => {
           14,
           25 // progressively reach width 25 at high zoom
         ],
-        'line-color': ['get', 'color'],
+        'line-color': ['to-color', ['feature-state', 'colorOverride'], ['get', 'color']],
         'line-opacity': [
           'interpolate',
           ['linear'],
@@ -414,7 +477,7 @@ export const useMap = () => {
         'icon-size': 1.2
       },
       paint: {
-        'icon-color': ['get', 'color']
+        'icon-color': ['to-color', ['feature-state', 'colorOverride'], ['get', 'color']]
       }
     });
     map.addLayer({
